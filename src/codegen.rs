@@ -151,6 +151,96 @@ impl<'c> Codegen<'c> {
 
         match operation {
             BfAST::LoopBlock(v) => {
+                // 特殊パターンの高速化
+                if v.len() == 0 {
+                    return Ok(());
+                } else if v.len() == 1 {
+                    if let BfAST::SubOp(k) = v[0] {
+                        if k == 1 {
+                            self.set_current(
+                                value_table,
+                                counter,
+                                self.context.i64_type().const_int(0 as u64, false),
+                            );
+                        } else {
+                            let res = self.builder.build_int_unsigned_rem(
+                                self.get_current(value_table, counter),
+                                self.context.i64_type().const_int(k as u64, false),
+                                "",
+                            );
+                            self.set_current(value_table, counter, res);
+                        }
+
+                        return Ok(());
+                    }
+                } else if v.len() == 3 {
+                    if let &[BfAST::AddPtr(j), BfAST::AddOp(k), BfAST::SubPtr(l)] = &v[0..3] {
+                        if j == l {
+                            let rhs = self.get_current(value_table, counter);
+
+                            let lh_pos = self.builder.build_int_add(
+                                self.builder.build_load(counter, "").into_int_value(),
+                                self.context.i64_type().const_int(j as u64, false),
+                                "",
+                            );
+
+                            let lhs_ref = unsafe {
+                                self.builder.build_in_bounds_gep(
+                                    value_table,
+                                    &[self.context.i64_type().const_int(0, false), lh_pos],
+                                    "",
+                                )
+                            };
+
+                            let orig = self.builder.build_load(lhs_ref, "").into_int_value();
+                            let lhs = self.context.i64_type().const_int(k as u64, false);
+
+                            let res = self.builder.build_int_add(
+                                orig,
+                                self.builder.build_int_mul(lhs, rhs, ""),
+                                "",
+                            );
+
+                            self.builder.build_store(lhs_ref, res);
+                            self.set_current(value_table, counter, res);
+
+                            return Ok(());
+                        }
+                    } else if let &[BfAST::SubPtr(j), BfAST::AddOp(k), BfAST::AddPtr(l)] = &v[0..3] {
+                        if j == l {
+                            let rhs = self.get_current(value_table, counter);
+
+                            let lh_pos = self.builder.build_int_add(
+                                self.builder.build_load(counter, "").into_int_value(),
+                                self.context.i64_type().const_int(j as u64, false),
+                                "",
+                            );
+
+                            let lhs_ref = unsafe {
+                                self.builder.build_in_bounds_gep(
+                                    value_table,
+                                    &[self.context.i64_type().const_int(0, false), lh_pos],
+                                    "",
+                                )
+                            };
+
+                            let orig = self.builder.build_load(lhs_ref, "").into_int_value();
+                            let lhs = self.context.i64_type().const_int(k as u64, false);
+
+                            let res = self.builder.build_int_add(
+                                orig,
+                                self.builder.build_int_mul(lhs, rhs, ""),
+                                "",
+                            );
+
+                            self.builder.build_store(lhs_ref, res);
+                            self.set_current(value_table, counter, res);
+
+                            return Ok(());
+                        }
+                    }
+                }
+
                 let loop_head = self.context.append_basic_block(function, "");
                 let loop_body = self.context.append_basic_block(function, "");
                 let loop_end = self.context.append_basic_block(function, "");

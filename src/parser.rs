@@ -1,7 +1,7 @@
 use crate::{ice, Error, Result};
 use pest::{iterators::Pair, Parser};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BfAST {
     LoopBlock(Vec<BfAST>),
     AddOp(usize),
