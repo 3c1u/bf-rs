@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-* Rust toolchain (1.38.9 or greater)
+* Rust toolchain (1.39.0 or greater)
 * LLVM 8.0
 
 ## Installation
