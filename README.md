@@ -36,4 +36,4 @@ These are some programs that I have found online. I did not write any of them.
 
 ## License
 
-This program is lisensed under the Apache License 2.0 and MIT License.
+This program is lisensed under the Apache License 2.0 or MIT License.
