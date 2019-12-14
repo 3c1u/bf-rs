@@ -1,0 +1,13 @@
+[package]
+name = "bf-rs"
+version = "0.1.0"
+authors = ["Hikaru Terazono (3c1u) <3c1u@vulpesgames.tokyo>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+pest = "2.1.2"
+pest_derive = "2.1.0"
+failure = "0.1.6"
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "llvm8-0" }

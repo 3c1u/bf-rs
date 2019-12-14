@@ -1,0 +1,18 @@
+increment         = { "+" }
+decrement         = { "-" }
+pointer_increment = { ">" }
+pointer_decrement = { "<" }
+print_character   = { "." }
+get_character     = { "," }
+
+loop_block        = { left_brace ~  block ~ right_brace }
+    left_brace  = { "[" }
+    right_brace = { "]" }
+
+symbol = { increment | decrement | pointer_increment
+         | pointer_decrement | print_character | get_character }
+
+block = { (loop_block | symbol) * }
+program = { SOI ~ block ~ EOI }
+
+WHITESPACE = _{ !(symbol | "[" | "]") ~ ANY }
