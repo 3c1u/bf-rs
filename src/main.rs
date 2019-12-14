@@ -39,9 +39,17 @@ fn main() {
     use crate::codegen::Codegen;
     use inkwell::context::Context;
 
-    let res = parser::parse(include_str!("../hanoi.bf")).unwrap();
-    let ctx = Context::create();
-    let codegen = Codegen::new(&ctx).unwrap();
+    let mut args = std::env::args();
+    if args.len() < 2 {
+        eprintln!("No file specified. Abort.");
+        return;
+    }
 
-    codegen.build(&res).unwrap();
+    let res = parser::parse(std::fs::read_to_string(args.nth(1).unwrap()).unwrap()).unwrap();
+    let opt_flag = args.nth(0).map(|v| v.starts_with("--opt")).unwrap_or(false);
+
+    let ctx = Context::create();
+    let codegen = Codegen::new(&ctx, opt_flag).unwrap();
+
+    codegen.run(&res).unwrap();
 }

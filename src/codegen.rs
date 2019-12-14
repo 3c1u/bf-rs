@@ -13,6 +13,8 @@ use inkwell::OptimizationLevel;
 
 use inkwell::values::{FunctionValue, IntValue, PointerValue};
 
+use std::io::{Read, Write};
+
 #[repr(C)]
 pub struct BfEnv {
     get_char: unsafe extern "C" fn() -> u8,
@@ -29,21 +31,28 @@ pub struct Codegen<'c> {
 }
 
 extern "C" fn bfrs_get_char() -> u8 {
-    0
+    let mut input = std::io::stdin();
+    let mut buf = [0u8];
+    input.read(&mut buf).unwrap();
+    buf[0]
 }
 
 extern "C" fn bfrs_print_char(c: u8) {
-    use std::io::Write;
     let mut out = std::io::stdout();
     out.write(&[c]).unwrap();
     out.flush().unwrap();
 }
 
 impl<'c> Codegen<'c> {
-    pub fn new(context: &'c Context) -> Result<Self> {
+    pub fn new(context: &'c Context, optimized: bool) -> Result<Self> {
         let module = context.create_module("bfrs");
+
         let execution_engine = module
-            .create_jit_execution_engine(OptimizationLevel::None)
+            .create_jit_execution_engine(if optimized {
+                OptimizationLevel::Aggressive
+            } else {
+                OptimizationLevel::None
+            })
             .map_err(|_| Error::Ice("failed to create execution engine".into()))?;
         let builder = context.create_builder();
 
@@ -55,7 +64,7 @@ impl<'c> Codegen<'c> {
         })
     }
 
-    pub fn build(&self, ast: &[BfAST]) -> Result<()> {
+    pub fn run(&self, ast: &[BfAST]) -> Result<()> {
         // 実行環境の構築
         let get_char_type = self
             .context
@@ -102,7 +111,8 @@ impl<'c> Codegen<'c> {
         let value_table = self.builder.build_alloca(value_table, "");
         let counter = self.builder.build_alloca(self.context.i64_type(), "");
 
-        self.builder.build_store(counter, self.context.i64_type().const_int(0, false));
+        self.builder
+            .build_store(counter, self.context.i64_type().const_int(0, false));
 
         for op in ast {
             self.build_operation(func, (get_char, put_char), op, value_table, counter)?;
@@ -110,9 +120,15 @@ impl<'c> Codegen<'c> {
 
         self.builder.build_return(None);
 
+        print!("building...");
+        std::io::stdout().flush().unwrap();
+
         let entry: JitFunction<BfBootstrap> =
             unsafe { self.execution_engine.get_function("bfrs_lang_start") }.unwrap();
 
+        print!("\u{001b}[2K\r");
+        std::io::stdout().flush().unwrap();
+        
         unsafe {
             entry.call(BfEnv {
                 get_char: bfrs_get_char,
@@ -154,7 +170,7 @@ impl<'c> Codegen<'c> {
                     &loop_end,
                     &loop_body,
                 );
-                
+
                 self.builder.position_at_end(&loop_body);
 
                 for i in v {
@@ -190,7 +206,17 @@ impl<'c> Codegen<'c> {
                 self.builder.build_call(env.1, &[arg.into()], "");
             }
             BfAST::GetChar => {
-                unimplemented!();
+                let res = self
+                    .builder
+                    .build_call(env.0, &[], "")
+                    .try_as_basic_value()
+                    .left()
+                    .unwrap();
+
+                let res: IntValue =
+                    self.builder
+                        .build_int_cast(res.into_int_value(), self.context.i8_type(), "");
+                self.set_current(value_table, counter, res);
             }
         }
 
