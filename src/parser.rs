@@ -138,11 +138,10 @@ fn visit_program(p: Pair<'_, Rule>, v: &mut Vec<BfAST>) -> Result<()> {
 }
 
 pub fn parse<P: AsRef<str>>(program: P) -> Result<Vec<BfAST>> {
-    let pairs = BfParser::parse(Rule::program, program.as_ref())?;
+    let mut pairs = BfParser::parse(Rule::program, program.as_ref())?;
     let program = pairs
-        .into_iter()
         .next()
-        .ok_or(Error::ice("no matching program"))?;
+        .ok_or_else(|| Error::ice("no matching program"))?;
 
     let mut program_out = vec![];
     visit_program(program, &mut program_out)?;

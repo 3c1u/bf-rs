@@ -31,13 +31,17 @@ pub struct Codegen<'c> {
 extern "C" fn bfrs_get_char() -> u8 {
     let mut input = std::io::stdin();
     let mut buf = [0u8];
-    input.read(&mut buf).unwrap();
+
+    if input.read(&mut buf).unwrap() == 0 {
+        return 0xFF; // EOF
+    }
+
     buf[0]
 }
 
 extern "C" fn bfrs_print_char(c: u8) {
     let mut out = std::io::stdout();
-    out.write(&[c]).unwrap();
+    out.write_all(&[c]).unwrap();
     out.flush().unwrap();
 }
 
@@ -167,7 +171,7 @@ impl<'c> Codegen<'c> {
         match operation {
             BfAST::LoopBlock(v) => {
                 // 特殊パターンの高速化
-                if v.len() == 0 {
+                if v.is_empty() {
                     return Ok(());
                 } else if v.len() == 1 {
                     if let BfAST::SubOp(k) = v[0] {
@@ -189,7 +193,7 @@ impl<'c> Codegen<'c> {
                         return Ok(());
                     }
                 } else if v.len() == 3 {
-                    if let &[BfAST::AddPtr(j), BfAST::AddOp(k), BfAST::SubPtr(l)] = &v[0..3] {
+                    if let [BfAST::AddPtr(j), BfAST::AddOp(k), BfAST::SubPtr(l)] = v[0..3] {
                         if j == l {
                             let rhs = self.get_current(value_table, counter);
 
@@ -221,8 +225,7 @@ impl<'c> Codegen<'c> {
 
                             return Ok(());
                         }
-                    } else if let &[BfAST::SubPtr(j), BfAST::AddOp(k), BfAST::AddPtr(l)] = &v[0..3]
-                    {
+                    } else if let [BfAST::SubPtr(j), BfAST::AddOp(k), BfAST::AddPtr(l)] = v[0..3] {
                         if j == l {
                             let rhs = self.get_current(value_table, counter);
 
