@@ -128,7 +128,7 @@ impl<'c> Codegen<'c> {
 
         print!("\u{001b}[2K\r");
         std::io::stdout().flush().unwrap();
-        
+
         unsafe {
             entry.call(BfEnv {
                 get_char: bfrs_get_char,
@@ -147,7 +147,6 @@ impl<'c> Codegen<'c> {
         value_table: PointerValue<'c>,
         counter: PointerValue<'c>,
     ) -> Result<()> {
-        let incrementor = self.context.i64_type().const_int(1, false);
         let cur = self.get_current(value_table, counter);
 
         match operation {
@@ -181,22 +180,38 @@ impl<'c> Codegen<'c> {
 
                 self.builder.position_at_end(&loop_end);
             }
-            BfAST::AddOp => {
-                let cur = self.builder.build_int_add(cur, incrementor, "");
+            BfAST::AddOp(k) => {
+                let cur = self.builder.build_int_add(
+                    cur,
+                    self.context.i64_type().const_int(*k as u64, false),
+                    "",
+                );
                 self.set_current(value_table, counter, cur);
             }
-            BfAST::SubOp => {
-                let cur = self.builder.build_int_sub(cur, incrementor, "");
+            BfAST::SubOp(k) => {
+                let cur = self.builder.build_int_sub(
+                    cur,
+                    self.context.i64_type().const_int(*k as u64, false),
+                    "",
+                );
                 self.set_current(value_table, counter, cur);
             }
-            BfAST::AddPtr => {
+            BfAST::AddPtr(k) => {
                 let counter_v = self.builder.build_load(counter, "").into_int_value();
-                let counter_incr = self.builder.build_int_add(counter_v, incrementor, "");
+                let counter_incr = self.builder.build_int_add(
+                    counter_v,
+                    self.context.i64_type().const_int(*k as u64, false),
+                    "",
+                );
                 self.builder.build_store(counter, counter_incr);
             }
-            BfAST::SubPtr => {
+            BfAST::SubPtr(k) => {
                 let counter_v = self.builder.build_load(counter, "").into_int_value();
-                let counter_incr = self.builder.build_int_sub(counter_v, incrementor, "");
+                let counter_incr = self.builder.build_int_sub(
+                    counter_v,
+                    self.context.i64_type().const_int(*k as u64, false),
+                    "",
+                );
                 self.builder.build_store(counter, counter_incr);
             }
             BfAST::PutChar => {

@@ -4,10 +4,10 @@ use pest::{iterators::Pair, Parser};
 #[derive(Clone, Debug)]
 pub enum BfAST {
     LoopBlock(Vec<BfAST>),
-    AddOp,
-    SubOp,
-    AddPtr,
-    SubPtr,
+    AddOp(usize),
+    SubOp(usize),
+    AddPtr(usize),
+    SubPtr(usize),
     PutChar,
     GetChar,
 }
@@ -26,19 +26,26 @@ fn visit_symbol(p: Pair<'_, Rule>, v: &mut Vec<BfAST>) -> Result<()> {
         );
     }
 
-    for tok in p.into_inner() {
+    let inner = p.into_inner();
+    let inner: Vec<_> = inner.collect();
+
+    for tok in &inner {
         match tok.as_rule() {
             Rule::increment => {
-                v.push(BfAST::AddOp);
+                v.push(BfAST::AddOp(inner.len()));
+                break;
             }
             Rule::decrement => {
-                v.push(BfAST::SubOp);
+                v.push(BfAST::SubOp(inner.len()));
+                break;
             }
             Rule::pointer_increment => {
-                v.push(BfAST::AddPtr);
+                v.push(BfAST::AddPtr(inner.len()));
+                break;
             }
             Rule::pointer_decrement => {
-                v.push(BfAST::SubPtr);
+                v.push(BfAST::SubPtr(inner.len()));
+                break;
             }
             Rule::print_character => {
                 v.push(BfAST::PutChar);
