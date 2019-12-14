@@ -15,13 +15,11 @@ use inkwell::values::{FunctionValue, IntValue, PointerValue};
 
 use std::io::{Read, Write};
 
-#[repr(C)]
-pub struct BfEnv {
-    get_char: unsafe extern "C" fn() -> u8,
-    print_char: unsafe extern "C" fn(c: u8),
-}
-
-pub type BfBootstrap = unsafe extern "C" fn(BfEnv);
+pub type BfBootstrap = unsafe extern "C" fn(
+    unsafe extern "C" fn() -> u8,
+    unsafe extern "C" fn(c: u8),
+    unsafe extern "C" fn(ptr: *mut u8, value: u8, len: u64),
+);
 
 pub struct Codegen<'c> {
     context: &'c Context,
@@ -41,6 +39,10 @@ extern "C" fn bfrs_print_char(c: u8) {
     let mut out = std::io::stdout();
     out.write(&[c]).unwrap();
     out.flush().unwrap();
+}
+
+unsafe extern "C" fn bfrs_memset(ptr: *mut u8, value: u8, len: u64) {
+    std::ptr::write_bytes(ptr, value, len as usize);
 }
 
 impl<'c> Codegen<'c> {
@@ -70,49 +72,65 @@ impl<'c> Codegen<'c> {
             .context
             .i8_type()
             .fn_type(&[], false)
-            .ptr_type(AddressSpace::Const);
+            .ptr_type(AddressSpace::Global);
 
         let put_char_type = self
             .context
             .void_type()
             .fn_type(&[self.context.i8_type().into()], false)
-            .ptr_type(AddressSpace::Const);
+            .ptr_type(AddressSpace::Global);
 
-        let bf_env_type = self
-            .context
-            .struct_type(&[get_char_type.into(), put_char_type.into()], false);
-        let fn_type = self
+        let memset_type = self
             .context
             .void_type()
-            .fn_type(&[bf_env_type.into()], false);
+            .fn_type(
+                &[
+                    self.context
+                        .i8_type()
+                        .ptr_type(AddressSpace::Generic)
+                        .into(),
+                    self.context.i8_type().into(),
+                    self.context.i64_type().into(),
+                ],
+                false,
+            )
+            .ptr_type(AddressSpace::Global);
+
+        let fn_type = self.context.void_type().fn_type(
+            &[
+                get_char_type.into(),
+                put_char_type.into(),
+                memset_type.into(),
+            ],
+            false,
+        );
+
         let func = self.module.add_function("bfrs_lang_start", fn_type, None);
+
         let basic_block = self.context.append_basic_block(func, "entry");
 
         self.builder.position_at_end(&basic_block);
 
-        let bf_env = func.get_nth_param(0).unwrap().into_struct_value();
-        let bf_env_ptr = self.builder.build_alloca(bf_env_type, "");
+        let get_char = func.get_nth_param(0).unwrap().into_pointer_value();
+        let put_char = func.get_nth_param(1).unwrap().into_pointer_value();
+        let memset = func.get_nth_param(2).unwrap().into_pointer_value();
 
-        self.builder.build_store(bf_env_ptr, bf_env);
-
-        let get_char_ref = unsafe { self.builder.build_struct_gep(bf_env_ptr, 0, "") };
-        let get_char = self
-            .builder
-            .build_load(get_char_ref, "")
-            .into_pointer_value();
-
-        let put_char_ref = unsafe { self.builder.build_struct_gep(bf_env_ptr, 1, "") };
-        let put_char = self
-            .builder
-            .build_load(put_char_ref, "")
-            .into_pointer_value();
-
-        let value_table = self.context.i64_type().array_type(10000);
+        let value_table = self.context.i8_type().array_type(10000);
         let value_table = self.builder.build_alloca(value_table, "");
         let counter = self.builder.build_alloca(self.context.i64_type(), "");
 
         self.builder
             .build_store(counter, self.context.i64_type().const_int(0, false));
+
+        self.builder.build_call(
+            memset,
+            &[
+                value_table.into(),
+                self.context.i8_type().const_int(0, false).into(),
+                self.context.i64_type().const_int(10000, false).into(),
+            ],
+            "",
+        );
 
         for op in ast {
             self.build_operation(func, (get_char, put_char), op, value_table, counter)?;
@@ -130,10 +148,7 @@ impl<'c> Codegen<'c> {
         std::io::stdout().flush().unwrap();
 
         unsafe {
-            entry.call(BfEnv {
-                get_char: bfrs_get_char,
-                print_char: bfrs_print_char,
-            });
+            entry.call(bfrs_get_char, bfrs_print_char, bfrs_memset);
         }
 
         Ok(())
@@ -160,12 +175,12 @@ impl<'c> Codegen<'c> {
                             self.set_current(
                                 value_table,
                                 counter,
-                                self.context.i64_type().const_int(0 as u64, false),
+                                self.context.i8_type().const_int(0 as u64, false),
                             );
                         } else {
                             let res = self.builder.build_int_unsigned_rem(
                                 self.get_current(value_table, counter),
-                                self.context.i64_type().const_int(k as u64, false),
+                                self.context.i8_type().const_int(k as u64, false),
                                 "",
                             );
                             self.set_current(value_table, counter, res);
@@ -193,11 +208,11 @@ impl<'c> Codegen<'c> {
                             };
 
                             let orig = self.builder.build_load(lhs_ref, "").into_int_value();
-                            let lhs = self.context.i64_type().const_int(k as u64, false);
+                            let lhs = self.context.i8_type().const_int(k as u64, false);
 
-                            let res = self.builder.build_int_add(
+                            let res = self.builder.build_int_nuw_add(
                                 orig,
-                                self.builder.build_int_mul(lhs, rhs, ""),
+                                self.builder.build_int_nuw_mul(lhs, rhs, ""),
                                 "",
                             );
 
@@ -206,11 +221,12 @@ impl<'c> Codegen<'c> {
 
                             return Ok(());
                         }
-                    } else if let &[BfAST::SubPtr(j), BfAST::AddOp(k), BfAST::AddPtr(l)] = &v[0..3] {
+                    } else if let &[BfAST::SubPtr(j), BfAST::AddOp(k), BfAST::AddPtr(l)] = &v[0..3]
+                    {
                         if j == l {
                             let rhs = self.get_current(value_table, counter);
 
-                            let lh_pos = self.builder.build_int_add(
+                            let lh_pos = self.builder.build_int_nuw_add(
                                 self.builder.build_load(counter, "").into_int_value(),
                                 self.context.i64_type().const_int(j as u64, false),
                                 "",
@@ -225,11 +241,11 @@ impl<'c> Codegen<'c> {
                             };
 
                             let orig = self.builder.build_load(lhs_ref, "").into_int_value();
-                            let lhs = self.context.i64_type().const_int(k as u64, false);
+                            let lhs = self.context.i8_type().const_int(k as u64, false);
 
-                            let res = self.builder.build_int_add(
+                            let res = self.builder.build_int_nuw_add(
                                 orig,
-                                self.builder.build_int_mul(lhs, rhs, ""),
+                                self.builder.build_int_nuw_mul(lhs, rhs, ""),
                                 "",
                             );
 
@@ -253,7 +269,7 @@ impl<'c> Codegen<'c> {
                     self.builder.build_int_compare(
                         IntPredicate::EQ,
                         self.get_current(value_table, counter),
-                        self.context.i64_type().const_int(0, false),
+                        self.context.i8_type().const_int(0, false),
                         "",
                     ),
                     &loop_end,
@@ -273,7 +289,7 @@ impl<'c> Codegen<'c> {
             BfAST::AddOp(k) => {
                 let cur = self.builder.build_int_add(
                     cur,
-                    self.context.i64_type().const_int(*k as u64, false),
+                    self.context.i8_type().const_int(*k as u64, false),
                     "",
                 );
                 self.set_current(value_table, counter, cur);
@@ -281,7 +297,7 @@ impl<'c> Codegen<'c> {
             BfAST::SubOp(k) => {
                 let cur = self.builder.build_int_sub(
                     cur,
-                    self.context.i64_type().const_int(*k as u64, false),
+                    self.context.i8_type().const_int(*k as u64, false),
                     "",
                 );
                 self.set_current(value_table, counter, cur);
@@ -305,10 +321,7 @@ impl<'c> Codegen<'c> {
                 self.builder.build_store(counter, counter_incr);
             }
             BfAST::PutChar => {
-                let arg: IntValue =
-                    self.builder
-                        .build_int_cast(cur.into(), self.context.i8_type(), "");
-                self.builder.build_call(env.1, &[arg.into()], "");
+                self.builder.build_call(env.1, &[cur.into()], "");
             }
             BfAST::GetChar => {
                 let res = self
@@ -316,11 +329,9 @@ impl<'c> Codegen<'c> {
                     .build_call(env.0, &[], "")
                     .try_as_basic_value()
                     .left()
-                    .unwrap();
+                    .unwrap()
+                    .into_int_value();
 
-                let res: IntValue =
-                    self.builder
-                        .build_int_cast(res.into_int_value(), self.context.i8_type(), "");
                 self.set_current(value_table, counter, res);
             }
         }
