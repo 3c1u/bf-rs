@@ -8,10 +8,10 @@ use inkwell::module::Module;
 use inkwell::AddressSpace;
 use inkwell::IntPredicate;
 use inkwell::OptimizationLevel;
+use inkwell::basic_block::BasicBlock;
+use inkwell::values::{FunctionValue, IntValue, PointerValue};
 
 // use crate::ice;
-
-use inkwell::values::{FunctionValue, IntValue, PointerValue};
 
 use std::io::{Read, Write};
 
@@ -164,6 +164,8 @@ impl<'c> Codegen<'c> {
         counter: PointerValue<'c>,
         v: &[BfAST],
     ) -> Result<bool> {
+        // TODO: too dirty; needs to refactor
+        
         if let [BfAST::AddPtr(j), BfAST::AddOp(k), BfAST::SubPtr(l), BfAST::SubOp(1)] = v[0..4] {
             if j == l {
                 let rhs = self.get_current(value_table, counter);
@@ -327,6 +329,212 @@ impl<'c> Codegen<'c> {
         return Ok(false);
     }
 
+    fn div_optimization(
+        &self,
+        function: FunctionValue<'c>,
+        value_table: PointerValue<'c>,
+        counter: PointerValue<'c>,
+        v: &[BfAST],
+        loop_end: &BasicBlock,
+    ) -> Result<bool> {
+        // TODO: too dirty; needs to refactor
+
+        if let [BfAST::SubOp(i), BfAST::AddPtr(j), BfAST::AddOp(1), BfAST::SubPtr(k)] = v[0..4] {
+            if j == k {
+                let cur = self.get_current(value_table, counter);
+                let rat = self.context.i8_type().const_int(i as u64, false);
+
+                let modulo = self.builder.build_int_unsigned_rem(cur, rat, "");
+                
+                let br_okay = self.context.append_basic_block(function, "");
+                let br_not_okay = self.context.append_basic_block(function, "");
+
+                self.builder.build_conditional_branch(
+                    self.builder.build_int_compare(IntPredicate::EQ, modulo, self.context.i8_type().const_int(0 as u64, false), ""),
+                     &br_okay, &br_not_okay);
+                
+                self.builder.position_at_end(&br_okay);
+
+                let dest_pos = self.builder.build_int_add(
+                    self.builder.build_load(counter, "").into_int_value(),
+                    self.context.i64_type().const_int(j as u64, false),
+                    "",
+                );
+
+                let dest_ref = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        value_table,
+                        &[self.context.i64_type().const_int(0, false), dest_pos],
+                        "",
+                    )
+                };
+
+                let dest = self.builder.build_load(dest_ref, "").into_int_value();
+                let res = self.builder
+                              .build_int_add(dest, self.builder.build_int_unsigned_div(cur, rat, ""), "");
+
+                self.builder.build_store(dest_ref, res);
+
+                self.set_current(
+                    value_table,
+                    counter,
+                    self.context.i8_type().const_int(0, false),
+                );
+
+                self.builder.build_unconditional_branch(loop_end);
+                
+                self.builder.position_at_end(&br_not_okay);
+
+                return Ok(true);
+            }
+        } else if let [BfAST::SubOp(i), BfAST::SubPtr(j), BfAST::AddOp(1), BfAST::AddPtr(k)] = v[0..4] {
+            if j == k {
+                let cur = self.get_current(value_table, counter);
+                let rat = self.context.i8_type().const_int(i as u64, false);
+
+                let modulo = self.builder.build_int_unsigned_rem(cur, rat, "");
+                
+                let br_okay = self.context.append_basic_block(function, "");
+                let br_not_okay = self.context.append_basic_block(function, "");
+
+                self.builder.build_conditional_branch(
+                    self.builder.build_int_compare(IntPredicate::EQ, modulo, self.context.i8_type().const_int(0 as u64, false), ""),
+                     &br_okay, &br_not_okay);
+                
+                self.builder.position_at_end(&br_okay);
+
+                let dest_pos = self.builder.build_int_sub(
+                    self.builder.build_load(counter, "").into_int_value(),
+                    self.context.i64_type().const_int(j as u64, false),
+                    "",
+                );
+
+                let dest_ref = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        value_table,
+                        &[self.context.i64_type().const_int(0, false), dest_pos],
+                        "",
+                    )
+                };
+
+                let dest = self.builder.build_load(dest_ref, "").into_int_value();
+                let res = self.builder
+                              .build_int_add(dest, self.builder.build_int_unsigned_div(cur, rat, ""), "");
+
+                self.builder.build_store(dest_ref, res);
+
+                self.set_current(
+                    value_table,
+                    counter,
+                    self.context.i8_type().const_int(0, false),
+                );
+
+                self.builder.build_unconditional_branch(loop_end);
+                
+                self.builder.position_at_end(&br_not_okay);
+
+                return Ok(true);
+            }
+        } else if let [BfAST::SubOp(i), BfAST::AddPtr(j), BfAST::SubOp(1), BfAST::SubPtr(k)] = v[0..4] {
+            if j == k {
+                let cur = self.get_current(value_table, counter);
+                let rat = self.context.i8_type().const_int(i as u64, false);
+
+                let modulo = self.builder.build_int_unsigned_rem(cur, rat, "");
+                
+                let br_okay = self.context.append_basic_block(function, "");
+                let br_not_okay = self.context.append_basic_block(function, "");
+
+                self.builder.build_conditional_branch(
+                    self.builder.build_int_compare(IntPredicate::EQ, modulo, self.context.i8_type().const_int(0 as u64, false), ""),
+                     &br_okay, &br_not_okay);
+                
+                self.builder.position_at_end(&br_okay);
+
+                let dest_pos = self.builder.build_int_add(
+                    self.builder.build_load(counter, "").into_int_value(),
+                    self.context.i64_type().const_int(j as u64, false),
+                    "",
+                );
+
+                let dest_ref = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        value_table,
+                        &[self.context.i64_type().const_int(0, false), dest_pos],
+                        "",
+                    )
+                };
+
+                let dest = self.builder.build_load(dest_ref, "").into_int_value();
+                let res = self.builder
+                              .build_int_sub(dest, self.builder.build_int_unsigned_div(cur, rat, ""), "");
+
+                self.builder.build_store(dest_ref, res);
+
+                self.set_current(
+                    value_table,
+                    counter,
+                    self.context.i8_type().const_int(0, false),
+                );
+
+                self.builder.build_unconditional_branch(loop_end);
+                
+                self.builder.position_at_end(&br_not_okay);
+
+                return Ok(true);
+            }
+        } else if let [BfAST::SubOp(i), BfAST::SubPtr(j), BfAST::SubOp(1), BfAST::AddPtr(k)] = v[0..4] {
+            if j == k {
+                let cur = self.get_current(value_table, counter);
+                let rat = self.context.i8_type().const_int(i as u64, false);
+
+                let modulo = self.builder.build_int_unsigned_rem(cur, rat, "");
+                
+                let br_okay = self.context.append_basic_block(function, "");
+                let br_not_okay = self.context.append_basic_block(function, "");
+
+                self.builder.build_conditional_branch(
+                    self.builder.build_int_compare(IntPredicate::EQ, modulo, self.context.i8_type().const_int(0 as u64, false), ""),
+                     &br_okay, &br_not_okay);
+                
+                self.builder.position_at_end(&br_okay);
+
+                let dest_pos = self.builder.build_int_sub(
+                    self.builder.build_load(counter, "").into_int_value(),
+                    self.context.i64_type().const_int(j as u64, false),
+                    "",
+                );
+
+                let dest_ref = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        value_table,
+                        &[self.context.i64_type().const_int(0, false), dest_pos],
+                        "",
+                    )
+                };
+
+                let dest = self.builder.build_load(dest_ref, "").into_int_value();
+                let res = self.builder
+                              .build_int_sub(dest, self.builder.build_int_unsigned_div(cur, rat, ""), "");
+
+                self.builder.build_store(dest_ref, res);
+
+                self.set_current(
+                    value_table,
+                    counter,
+                    self.context.i8_type().const_int(0, false),
+                );
+
+                self.builder.build_unconditional_branch(loop_end);
+                
+                self.builder.position_at_end(&br_not_okay);
+
+                return Ok(true);
+            }
+        }
+        return Ok(false);
+    }
+
     fn build_operation(
         &self,
         function: FunctionValue<'c>,
@@ -371,6 +579,11 @@ impl<'c> Codegen<'c> {
                 let loop_head = self.context.append_basic_block(function, "");
                 let loop_body = self.context.append_basic_block(function, "");
                 let loop_end = self.context.append_basic_block(function, "");
+
+                if v.len() == 4 {
+                    // division optimization
+                    self.div_optimization(function, value_table, counter, &v, &loop_end)?;
+                }
 
                 self.builder.build_unconditional_branch(&loop_head);
 

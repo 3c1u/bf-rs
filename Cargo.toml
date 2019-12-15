@@ -1,6 +1,6 @@
 [package]
 name = "bf-rs"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Hikaru Terazono (3c1u) <3c1u@vulpesgames.tokyo>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
