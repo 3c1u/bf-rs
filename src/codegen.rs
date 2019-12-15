@@ -551,21 +551,12 @@ impl<'c> Codegen<'c> {
                 if v.is_empty() {
                     return Ok(());
                 } else if v.len() == 1 {
-                    if let BfAST::SubOp(k) = v[0] {
-                        if k == 1 {
-                            self.set_current(
-                                value_table,
-                                counter,
-                                self.context.i8_type().const_int(0 as u64, false),
-                            );
-                        } else {
-                            let res = self.builder.build_int_unsigned_rem(
-                                self.get_current(value_table, counter),
-                                self.context.i8_type().const_int(k as u64, false),
-                                "",
-                            );
-                            self.set_current(value_table, counter, res);
-                        }
+                    if let BfAST::SubOp(_) = v[0] {
+                        self.set_current(
+                            value_table,
+                            counter,
+                            self.context.i8_type().const_int(0 as u64, false),
+                        );
 
                         return Ok(());
                     }
