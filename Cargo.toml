@@ -5,6 +5,10 @@ authors = ["Hikaru Terazono (3c1u) <3c1u@vulpesgames.tokyo>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Fast Brainfuck interpreter written in Rust"
+repository = "https://github.com/3c1u/bf-rs"
+
+keywords = ["brainfuck", "llvm", "jit", "esolang", "interpreter"]
 
 [dependencies]
 pest = "2.1.2"

@@ -1,5 +1,8 @@
 # bf-rs
 
+[![Actions Status](https://github.com/3c1u/bf-rs/workflows/Rust/badge.svg)](https://github.com/3c1u/bf-rs/actions)
+
+
 **Fast** Brainfuck interpreter written in Rust.
 
 ## Prerequisites
