@@ -158,6 +158,175 @@ impl<'c> Codegen<'c> {
         Ok(())
     }
 
+    fn balanced_loop_optimization(
+        &self,
+        value_table: PointerValue<'c>,
+        counter: PointerValue<'c>,
+        v: &[BfAST],
+    ) -> Result<bool> {
+        if let [BfAST::AddPtr(j), BfAST::AddOp(k), BfAST::SubPtr(l), BfAST::SubOp(1)] = v[0..4] {
+            if j == l {
+                let rhs = self.get_current(value_table, counter);
+
+                let dest_pos = self.builder.build_int_add(
+                    self.builder.build_load(counter, "").into_int_value(),
+                    self.context.i64_type().const_int(j as u64, false),
+                    "",
+                );
+
+                let dest_ref = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        value_table,
+                        &[self.context.i64_type().const_int(0, false), dest_pos],
+                        "",
+                    )
+                };
+
+                let dest = self.builder.build_load(dest_ref, "").into_int_value();
+
+                let res = if k != 1 {
+                    let k = self.context.i8_type().const_int(k as u64, false);
+
+                    self.builder
+                        .build_int_add(dest, self.builder.build_int_mul(k, rhs, ""), "")
+                } else {
+                    self.builder.build_int_add(dest, rhs, "")
+                };
+
+                self.builder.build_store(dest_ref, res);
+                self.set_current(
+                    value_table,
+                    counter,
+                    self.context.i8_type().const_int(0, false),
+                );
+
+                return Ok(true);
+            }
+        } else if let [BfAST::SubPtr(j), BfAST::AddOp(k), BfAST::AddPtr(l), BfAST::SubOp(1)] =
+            v[0..4]
+        {
+            if j == l {
+                let rhs = self.get_current(value_table, counter);
+
+                let dest_pos = self.builder.build_int_sub(
+                    self.builder.build_load(counter, "").into_int_value(),
+                    self.context.i64_type().const_int(j as u64, false),
+                    "",
+                );
+
+                let dest_ref = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        value_table,
+                        &[self.context.i64_type().const_int(0, false), dest_pos],
+                        "",
+                    )
+                };
+
+                let dest = self.builder.build_load(dest_ref, "").into_int_value();
+
+                let res = if k != 1 {
+                    let k = self.context.i8_type().const_int(k as u64, false);
+
+                    self.builder
+                        .build_int_add(dest, self.builder.build_int_mul(k, rhs, ""), "")
+                } else {
+                    self.builder.build_int_add(dest, rhs, "")
+                };
+
+                self.builder.build_store(dest_ref, res);
+                self.set_current(
+                    value_table,
+                    counter,
+                    self.context.i8_type().const_int(0, false),
+                );
+
+                return Ok(true);
+            }
+        } else if let [BfAST::AddPtr(j), BfAST::SubOp(k), BfAST::SubPtr(l), BfAST::SubOp(1)] =
+            v[0..4]
+        {
+            if j == l {
+                let rhs = self.get_current(value_table, counter);
+
+                let dest_pos = self.builder.build_int_add(
+                    self.builder.build_load(counter, "").into_int_value(),
+                    self.context.i64_type().const_int(j as u64, false),
+                    "",
+                );
+
+                let dest_ref = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        value_table,
+                        &[self.context.i64_type().const_int(0, false), dest_pos],
+                        "",
+                    )
+                };
+
+                let dest = self.builder.build_load(dest_ref, "").into_int_value();
+
+                let res = if k != 1 {
+                    let k = self.context.i8_type().const_int(k as u64, false);
+
+                    self.builder
+                        .build_int_sub(dest, self.builder.build_int_mul(k, rhs, ""), "")
+                } else {
+                    self.builder.build_int_sub(dest, rhs, "")
+                };
+
+                self.builder.build_store(dest_ref, res);
+                self.set_current(
+                    value_table,
+                    counter,
+                    self.context.i8_type().const_int(0, false),
+                );
+
+                return Ok(true);
+            }
+        } else if let [BfAST::SubPtr(j), BfAST::SubOp(k), BfAST::AddPtr(l), BfAST::SubOp(1)] =
+            v[0..4]
+        {
+            if j == l {
+                let rhs = self.get_current(value_table, counter);
+
+                let dest_pos = self.builder.build_int_sub(
+                    self.builder.build_load(counter, "").into_int_value(),
+                    self.context.i64_type().const_int(j as u64, false),
+                    "",
+                );
+
+                let dest_ref = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        value_table,
+                        &[self.context.i64_type().const_int(0, false), dest_pos],
+                        "",
+                    )
+                };
+
+                let dest = self.builder.build_load(dest_ref, "").into_int_value();
+
+                let res = if k != 1 {
+                    let k = self.context.i8_type().const_int(k as u64, false);
+
+                    self.builder
+                        .build_int_sub(dest, self.builder.build_int_mul(k, rhs, ""), "")
+                } else {
+                    self.builder.build_int_sub(dest, rhs, "")
+                };
+
+                self.builder.build_store(dest_ref, res);
+                self.set_current(
+                    value_table,
+                    counter,
+                    self.context.i8_type().const_int(0, false),
+                );
+
+                return Ok(true);
+            }
+        }
+
+        return Ok(false);
+    }
+
     fn build_operation(
         &self,
         function: FunctionValue<'c>,
@@ -192,71 +361,10 @@ impl<'c> Codegen<'c> {
 
                         return Ok(());
                     }
-                } else if v.len() == 3 {
-                    if let [BfAST::AddPtr(j), BfAST::AddOp(k), BfAST::SubPtr(l)] = v[0..3] {
-                        if j == l {
-                            let rhs = self.get_current(value_table, counter);
-
-                            let lh_pos = self.builder.build_int_add(
-                                self.builder.build_load(counter, "").into_int_value(),
-                                self.context.i64_type().const_int(j as u64, false),
-                                "",
-                            );
-
-                            let lhs_ref = unsafe {
-                                self.builder.build_in_bounds_gep(
-                                    value_table,
-                                    &[self.context.i64_type().const_int(0, false), lh_pos],
-                                    "",
-                                )
-                            };
-
-                            let orig = self.builder.build_load(lhs_ref, "").into_int_value();
-                            let lhs = self.context.i8_type().const_int(k as u64, false);
-
-                            let res = self.builder.build_int_nuw_add(
-                                orig,
-                                self.builder.build_int_nuw_mul(lhs, rhs, ""),
-                                "",
-                            );
-
-                            self.builder.build_store(lhs_ref, res);
-                            self.set_current(value_table, counter, res);
-
-                            return Ok(());
-                        }
-                    } else if let [BfAST::SubPtr(j), BfAST::AddOp(k), BfAST::AddPtr(l)] = v[0..3] {
-                        if j == l {
-                            let rhs = self.get_current(value_table, counter);
-
-                            let lh_pos = self.builder.build_int_nuw_add(
-                                self.builder.build_load(counter, "").into_int_value(),
-                                self.context.i64_type().const_int(j as u64, false),
-                                "",
-                            );
-
-                            let lhs_ref = unsafe {
-                                self.builder.build_in_bounds_gep(
-                                    value_table,
-                                    &[self.context.i64_type().const_int(0, false), lh_pos],
-                                    "",
-                                )
-                            };
-
-                            let orig = self.builder.build_load(lhs_ref, "").into_int_value();
-                            let lhs = self.context.i8_type().const_int(k as u64, false);
-
-                            let res = self.builder.build_int_nuw_add(
-                                orig,
-                                self.builder.build_int_nuw_mul(lhs, rhs, ""),
-                                "",
-                            );
-
-                            self.builder.build_store(lhs_ref, res);
-                            self.set_current(value_table, counter, res);
-
-                            return Ok(());
-                        }
+                } else if v.len() == 4 {
+                    // balanced loop optimization (frequently used on multiplications)
+                    if self.balanced_loop_optimization(value_table, counter, &v)? {
+                        return Ok(());
                     }
                 }
 
