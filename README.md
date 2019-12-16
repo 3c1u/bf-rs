@@ -19,14 +19,14 @@ cargo install --git https://github.com/3c1u/bf-rs.git
 
 This table shows the time taken to run the programs on interpreters. These results were measured on a MacBook Pro (Mid 2016, i7-6700HQ).
 
-| | bf-rs (v1.0.0) | bf-rs (opt) | [bfc](https://github.com/barracks510/bfc) | [bf02](https://github.com/3c1u/bf-interpreter) |
+| | bf-rs (v1.0.1) | bf-rs (opt) | [bfc](https://github.com/barracks510/bfc) | [bf02](https://github.com/3c1u/bf-interpreter) |
 |:--|:-|:-|:-|:--|
-|mandelbrot| 4.07 sec | 4.06 sec | 5.26 sec | 9.82 sec |
-|hanoi     | 0.72 sec | 1.61 sec | 0.38 sec | 1.06 sec |
-|long      | 2.28 sec | 1.07 sec | 2.51 sec | 7.30 sec |
-|bench     | 0.34 sec | 0.31 sec | 0.41 sec | 0.58 sec |
-
-## About example programs
+|mandelbrot| 3.56 sec | 3.22 sec | 5.26 sec | 9.82 sec |
+|hanoi     | 0.44 sec | 1.79 sec | 0.38 sec | 1.06 sec |
+|long      | 2.07 sec | 0.87 sec | 2.51 sec | 7.30 sec |
+|bench     | 0.16 sec | 0.10 sec | 0.41 sec | 0.58 sec |
+|factor    | 0.83 sec | 0.67 sec | 1.19 sec | 4.00 sec |
+## About example programs   
 
 These are some programs that I have found online. I did not write any of them.
 
