@@ -17,7 +17,7 @@ cargo install --git https://github.com/3c1u/bf-rs.git
 
 ## Benchmarks
 
-This table shows the time taken to run the programs on interpreters. These results were measured on a MacBook Pro (Mid 2016, i7-6700HQ).
+This table shows the time taken to run the programs on interpreters. These results were measured on a MacBook Pro (Late 2016, i7-6700HQ).
 
 | | bf-rs (v1.0.1) | bf-rs (opt) | [bfc](https://github.com/barracks510/bfc) | [bf02](https://github.com/3c1u/bf-interpreter) |
 |:--|:-|:-|:-|:--|
