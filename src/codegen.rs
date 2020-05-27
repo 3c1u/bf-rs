@@ -1,15 +1,15 @@
 use crate::parser::BfAST;
 use crate::{Error, Result};
 
+use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::execution_engine::{ExecutionEngine, JitFunction};
 use inkwell::module::Module;
+use inkwell::values::{FunctionValue, IntValue, PointerValue};
 use inkwell::AddressSpace;
 use inkwell::IntPredicate;
 use inkwell::OptimizationLevel;
-use inkwell::basic_block::BasicBlock;
-use inkwell::values::{FunctionValue, IntValue, PointerValue};
 
 // use crate::ice;
 
@@ -113,7 +113,7 @@ impl<'c> Codegen<'c> {
 
         let basic_block = self.context.append_basic_block(func, "entry");
 
-        self.builder.position_at_end(&basic_block);
+        self.builder.position_at_end(basic_block);
 
         let get_char = func.get_nth_param(0).unwrap().into_pointer_value();
         let put_char = func.get_nth_param(1).unwrap().into_pointer_value();
@@ -165,7 +165,7 @@ impl<'c> Codegen<'c> {
         v: &[BfAST],
     ) -> Result<bool> {
         // TODO: too dirty; needs to refactor
-        
+
         if let [BfAST::AddPtr(j), BfAST::AddOp(k), BfAST::SubPtr(l), BfAST::SubOp(1)] = v[0..4] {
             if j == l {
                 let rhs = self.get_current(value_table, counter);
@@ -345,15 +345,22 @@ impl<'c> Codegen<'c> {
                 let rat = self.context.i8_type().const_int(i as u64, false);
 
                 let modulo = self.builder.build_int_unsigned_rem(cur, rat, "");
-                
+
                 let br_okay = self.context.append_basic_block(function, "");
                 let br_not_okay = self.context.append_basic_block(function, "");
 
                 self.builder.build_conditional_branch(
-                    self.builder.build_int_compare(IntPredicate::EQ, modulo, self.context.i8_type().const_int(0 as u64, false), ""),
-                     &br_okay, &br_not_okay);
-                
-                self.builder.position_at_end(&br_okay);
+                    self.builder.build_int_compare(
+                        IntPredicate::EQ,
+                        modulo,
+                        self.context.i8_type().const_int(0 as u64, false),
+                        "",
+                    ),
+                    br_okay,
+                    br_not_okay,
+                );
+
+                self.builder.position_at_end(br_okay);
 
                 let dest_pos = self.builder.build_int_add(
                     self.builder.build_load(counter, "").into_int_value(),
@@ -370,8 +377,11 @@ impl<'c> Codegen<'c> {
                 };
 
                 let dest = self.builder.build_load(dest_ref, "").into_int_value();
-                let res = self.builder
-                              .build_int_add(dest, self.builder.build_int_unsigned_div(cur, rat, ""), "");
+                let res = self.builder.build_int_add(
+                    dest,
+                    self.builder.build_int_unsigned_div(cur, rat, ""),
+                    "",
+                );
 
                 self.builder.build_store(dest_ref, res);
 
@@ -381,27 +391,36 @@ impl<'c> Codegen<'c> {
                     self.context.i8_type().const_int(0, false),
                 );
 
-                self.builder.build_unconditional_branch(loop_end);
-                
-                self.builder.position_at_end(&br_not_okay);
+                self.builder.build_unconditional_branch(loop_end.clone());
+
+                self.builder.position_at_end(br_not_okay);
 
                 return Ok(true);
             }
-        } else if let [BfAST::SubOp(i), BfAST::SubPtr(j), BfAST::AddOp(1), BfAST::AddPtr(k)] = v[0..4] {
+        } else if let [BfAST::SubOp(i), BfAST::SubPtr(j), BfAST::AddOp(1), BfAST::AddPtr(k)] =
+            v[0..4]
+        {
             if j == k {
                 let cur = self.get_current(value_table, counter);
                 let rat = self.context.i8_type().const_int(i as u64, false);
 
                 let modulo = self.builder.build_int_unsigned_rem(cur, rat, "");
-                
+
                 let br_okay = self.context.append_basic_block(function, "");
                 let br_not_okay = self.context.append_basic_block(function, "");
 
                 self.builder.build_conditional_branch(
-                    self.builder.build_int_compare(IntPredicate::EQ, modulo, self.context.i8_type().const_int(0 as u64, false), ""),
-                     &br_okay, &br_not_okay);
-                
-                self.builder.position_at_end(&br_okay);
+                    self.builder.build_int_compare(
+                        IntPredicate::EQ,
+                        modulo,
+                        self.context.i8_type().const_int(0 as u64, false),
+                        "",
+                    ),
+                    br_okay,
+                    br_not_okay,
+                );
+
+                self.builder.position_at_end(br_okay);
 
                 let dest_pos = self.builder.build_int_sub(
                     self.builder.build_load(counter, "").into_int_value(),
@@ -418,8 +437,11 @@ impl<'c> Codegen<'c> {
                 };
 
                 let dest = self.builder.build_load(dest_ref, "").into_int_value();
-                let res = self.builder
-                              .build_int_add(dest, self.builder.build_int_unsigned_div(cur, rat, ""), "");
+                let res = self.builder.build_int_add(
+                    dest,
+                    self.builder.build_int_unsigned_div(cur, rat, ""),
+                    "",
+                );
 
                 self.builder.build_store(dest_ref, res);
 
@@ -429,27 +451,36 @@ impl<'c> Codegen<'c> {
                     self.context.i8_type().const_int(0, false),
                 );
 
-                self.builder.build_unconditional_branch(loop_end);
-                
-                self.builder.position_at_end(&br_not_okay);
+                self.builder.build_unconditional_branch(*loop_end);
+
+                self.builder.position_at_end(br_not_okay);
 
                 return Ok(true);
             }
-        } else if let [BfAST::SubOp(i), BfAST::AddPtr(j), BfAST::SubOp(1), BfAST::SubPtr(k)] = v[0..4] {
+        } else if let [BfAST::SubOp(i), BfAST::AddPtr(j), BfAST::SubOp(1), BfAST::SubPtr(k)] =
+            v[0..4]
+        {
             if j == k {
                 let cur = self.get_current(value_table, counter);
                 let rat = self.context.i8_type().const_int(i as u64, false);
 
                 let modulo = self.builder.build_int_unsigned_rem(cur, rat, "");
-                
+
                 let br_okay = self.context.append_basic_block(function, "");
                 let br_not_okay = self.context.append_basic_block(function, "");
 
                 self.builder.build_conditional_branch(
-                    self.builder.build_int_compare(IntPredicate::EQ, modulo, self.context.i8_type().const_int(0 as u64, false), ""),
-                     &br_okay, &br_not_okay);
-                
-                self.builder.position_at_end(&br_okay);
+                    self.builder.build_int_compare(
+                        IntPredicate::EQ,
+                        modulo,
+                        self.context.i8_type().const_int(0 as u64, false),
+                        "",
+                    ),
+                    br_okay,
+                    br_not_okay,
+                );
+
+                self.builder.position_at_end(br_okay);
 
                 let dest_pos = self.builder.build_int_add(
                     self.builder.build_load(counter, "").into_int_value(),
@@ -466,8 +497,11 @@ impl<'c> Codegen<'c> {
                 };
 
                 let dest = self.builder.build_load(dest_ref, "").into_int_value();
-                let res = self.builder
-                              .build_int_sub(dest, self.builder.build_int_unsigned_div(cur, rat, ""), "");
+                let res = self.builder.build_int_sub(
+                    dest,
+                    self.builder.build_int_unsigned_div(cur, rat, ""),
+                    "",
+                );
 
                 self.builder.build_store(dest_ref, res);
 
@@ -477,27 +511,36 @@ impl<'c> Codegen<'c> {
                     self.context.i8_type().const_int(0, false),
                 );
 
-                self.builder.build_unconditional_branch(loop_end);
-                
-                self.builder.position_at_end(&br_not_okay);
+                self.builder.build_unconditional_branch(*loop_end);
+
+                self.builder.position_at_end(br_not_okay);
 
                 return Ok(true);
             }
-        } else if let [BfAST::SubOp(i), BfAST::SubPtr(j), BfAST::SubOp(1), BfAST::AddPtr(k)] = v[0..4] {
+        } else if let [BfAST::SubOp(i), BfAST::SubPtr(j), BfAST::SubOp(1), BfAST::AddPtr(k)] =
+            v[0..4]
+        {
             if j == k {
                 let cur = self.get_current(value_table, counter);
                 let rat = self.context.i8_type().const_int(i as u64, false);
 
                 let modulo = self.builder.build_int_unsigned_rem(cur, rat, "");
-                
+
                 let br_okay = self.context.append_basic_block(function, "");
                 let br_not_okay = self.context.append_basic_block(function, "");
 
                 self.builder.build_conditional_branch(
-                    self.builder.build_int_compare(IntPredicate::EQ, modulo, self.context.i8_type().const_int(0 as u64, false), ""),
-                     &br_okay, &br_not_okay);
-                
-                self.builder.position_at_end(&br_okay);
+                    self.builder.build_int_compare(
+                        IntPredicate::EQ,
+                        modulo,
+                        self.context.i8_type().const_int(0 as u64, false),
+                        "",
+                    ),
+                    br_okay,
+                    br_not_okay,
+                );
+
+                self.builder.position_at_end(br_okay);
 
                 let dest_pos = self.builder.build_int_sub(
                     self.builder.build_load(counter, "").into_int_value(),
@@ -514,8 +557,11 @@ impl<'c> Codegen<'c> {
                 };
 
                 let dest = self.builder.build_load(dest_ref, "").into_int_value();
-                let res = self.builder
-                              .build_int_sub(dest, self.builder.build_int_unsigned_div(cur, rat, ""), "");
+                let res = self.builder.build_int_sub(
+                    dest,
+                    self.builder.build_int_unsigned_div(cur, rat, ""),
+                    "",
+                );
 
                 self.builder.build_store(dest_ref, res);
 
@@ -525,9 +571,9 @@ impl<'c> Codegen<'c> {
                     self.context.i8_type().const_int(0, false),
                 );
 
-                self.builder.build_unconditional_branch(loop_end);
-                
-                self.builder.position_at_end(&br_not_okay);
+                self.builder.build_unconditional_branch(*loop_end);
+
+                self.builder.position_at_end(br_not_okay);
 
                 return Ok(true);
             }
@@ -576,9 +622,9 @@ impl<'c> Codegen<'c> {
                     self.div_optimization(function, value_table, counter, &v, &loop_end)?;
                 }
 
-                self.builder.build_unconditional_branch(&loop_head);
+                self.builder.build_unconditional_branch(loop_head);
 
-                self.builder.position_at_end(&loop_head);
+                self.builder.position_at_end(loop_head);
 
                 self.builder.build_conditional_branch(
                     self.builder.build_int_compare(
@@ -587,19 +633,19 @@ impl<'c> Codegen<'c> {
                         self.context.i8_type().const_int(0, false),
                         "",
                     ),
-                    &loop_end,
-                    &loop_body,
+                    loop_end,
+                    loop_body,
                 );
 
-                self.builder.position_at_end(&loop_body);
+                self.builder.position_at_end(loop_body);
 
                 for i in v {
                     self.build_operation(function, env, i, value_table, counter)?;
                 }
 
-                self.builder.build_unconditional_branch(&loop_head);
+                self.builder.build_unconditional_branch(loop_head);
 
-                self.builder.position_at_end(&loop_end);
+                self.builder.position_at_end(loop_end);
             }
             BfAST::AddOp(k) => {
                 let cur = self.builder.build_int_add(
