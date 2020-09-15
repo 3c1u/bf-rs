@@ -1,7 +1,7 @@
 //! Brainfuck implementation in Rust
 #[macro_use]
 extern crate pest_derive;
-use failure::Fail;
+use thiserror::Error;
 
 pub mod codegen;
 pub mod parser;
@@ -13,11 +13,11 @@ macro_rules! ice {
     };
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum Error {
-    #[fail(display = "{}", _0)]
+    #[error("{0}")]
     ParseError(parser::ParseError),
-    #[fail(display = "internal compiler error: {}", _0)]
+    #[error("internal compiler error: {0}")]
     Ice(std::borrow::Cow<'static, str>),
 }
 
